@@ -1,43 +1,85 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>Mineral Map</title>
-
-<link rel="stylesheet" href="node_modules/leaflet/dist/leaflet.css"/>
-
-<style>
-#map{
-height:100vh;
-}
-</style>
-
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoChemAD Map Viewer</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <link rel="stylesheet" href="./style.css" />
 </head>
-
 <body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div>
+        <h1>GeoChemAD Map Viewer</h1>
+        <p class="subtitle">Upload a geochemical CSV and display valid points on the map.</p>
+      </div>
 
-<h2>Mineral Data Map</h2>
+      <section class="panel">
+        <label for="csvFile" class="upload-label">Choose CSV file</label>
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+        <p class="hint">Supported columns: <code>X</code>, <code>Y</code>. Site files and sample files are both supported.</p>
+      </section>
 
-<div id="map"></div>
+      <section class="panel info-grid">
+        <div>
+          <span class="label">Status</span>
+          <strong id="statusText">Waiting for upload</strong>
+        </div>
+        <div>
+          <span class="label">Detected type</span>
+          <strong id="typeText">—</strong>
+        </div>
+        <div>
+          <span class="label">File</span>
+          <strong id="fileText">—</strong>
+        </div>
+        <div>
+          <span class="label">Rows</span>
+          <strong id="rowsText">0</strong>
+        </div>
+        <div>
+          <span class="label">Valid points</span>
+          <strong id="pointsText">0</strong>
+        </div>
+      </section>
 
-<script src="node_modules/leaflet/dist/leaflet.js"></script>
+      <section class="panel">
+        <div class="legend-item">
+          <span class="legend-dot sample"></span>
+          <span>Sample data</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot site"></span>
+          <span>Site data</span>
+        </div>
+      </section>
 
-<script>
+      <section class="panel preview-panel">
+        <div class="preview-header">
+          <h2>Preview</h2>
+          <span id="previewType" class="pill">No data</span>
+        </div>
+        <div id="previewBox" class="preview-box">Upload a CSV to preview the first valid row.</div>
+      </section>
+    </aside>
 
-const map = L.map('map').setView([31.57,120.29],6);
+    <main class="map-area">
+      <div id="map"></div>
+    </main>
+  </div>
 
-L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-{
-maxZoom:19
-}
-).addTo(map);
-
-L.marker([31.57,120.29])
-.addTo(map)
-.bindPopup("Example mineral location");
-
-</script>
-
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="./main.js"></script>
 </body>
 </html>
