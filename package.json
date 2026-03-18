@@ -1,8 +1,8 @@
 {
-  "name": "geochemad-mvp",
-  "version": "1.0.0",
+  "name": "geochemad-v2",
+  "version": "2.0.0",
   "private": true,
-  "description": "Simple CSV-to-map viewer for geochemical data",
+  "description": "Pure front-end geochemical anomaly visualization tool",
   "scripts": {
     "start": "npx serve ."
   },

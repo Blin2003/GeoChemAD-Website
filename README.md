@@ -1,44 +1,59 @@
-# GeoChemAD-Website
+# GeoChemAD v2
 
-A minimal front-end project for viewing geochemical CSV data on a Leaflet map.
+GeoChemAD v2 extends the original MVP map viewer into a browser-based geochemical anomaly visualization tool.
 
-## Features
-- Open the webpage locally
-- Upload one CSV file at a time
-- Supports both sample CSV and site CSV
-- Automatically detects `X` / `Y` as longitude / latitude
-- Displays points on a map
-- Popup shows key fields only
-- Ignores missing values such as `-9999`
+## What it does
 
-## Files
-- `index.html` - page layout
-- `style.css` - page styles
-- `main.js` - map setup, upload, CSV parsing, point rendering
-- `package.json` - simple local start command
+- loads **sample CSV** and **site CSV** separately
+- detects analyte columns such as `Au_ppm`, `Cu_ppm`, `Fe_ppm`, `W_ppm`, `Ni_ppm`
+- preprocesses values in the browser
+  - filters values at or below the invalid threshold, default `-9999`
+  - replaces non-positive values with half of the smallest positive value for that element
+  - optionally applies `log(1 + x)` transformation
+- computes anomaly scores
+  - Z-score
+  - Robust Z-score using median and MAD
+  - Percentile score
+  - Composite mean across multiple selected elements
+  - Composite max across multiple selected elements
+- colors sample points by anomaly score
+- highlights points above the anomaly threshold
+- displays nearest known site distance for each scored sample point
 
-## Run
-### Option 1: open directly
-You can double-click `index.html`.
-
-### Option 2: run a local static server (recommended)
-In the project folder:
+## Run locally
 
 ```bash
-npx serve .
+npm install
+npm start
 ```
 
-Then open the local address shown in the terminal.
+Then open the local URL shown in the terminal.
 
-## CSV requirements
-The CSV must contain:
-- `X` = longitude
-- `Y` = latitude
+## Expected files
 
-If columns like `SITE_CODE` / `SITE_TITLE` exist, the file is treated as a site dataset.
-If columns like `SAMPLEID` / `SAMPLETYPE` exist, the file is treated as a sample dataset.
+### Sample CSV
+Must contain:
+- `X` longitude
+- `Y` latitude
+- one or more analyte columns such as `Au_ppm`, `Cu_ppm`, `W_ppm`
 
-## Current behavior
-- Initial map view is set to Western Australia
-- After upload, the map automatically zooms to the uploaded points
-- Site and sample data use different colors
+### Site CSV
+Must contain:
+- `X` longitude
+- `Y` latitude
+- preferably `SITE_CODE`, `SITE_TITLE`, or related site fields
+
+## Suggested workflow
+
+1. Upload a sample CSV.
+2. Upload the matching site CSV.
+3. Choose a primary element or multiple elements.
+4. Keep `log(1+x)` enabled for most geochemical data.
+5. Start with **Robust Z-score** and threshold `2.0`.
+6. Toggle **show only anomaly points** to inspect targets.
+
+## Notes
+
+- this is still a **pure front-end** project with no model training backend
+- it is designed as a strong practical bridge between your current MVP and a later machine-learning version
+- it works best as an interactive anomaly exploration tool for the provided GeoChemAD-style datasets
