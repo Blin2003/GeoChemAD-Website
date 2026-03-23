@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>GeoChemAD Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="/web/styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="panel hero">
+        <div>
+          <p class="eyebrow">GeoChemAD</p>
+          <h1>Upload CSV and run anomaly detection</h1>
+          <p class="subtle">
+            Customer workflow only: upload a sample CSV and a site CSV, launch a run, then inspect anomaly metrics and the map.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel controls">
+        <h2>Run Experiment</h2>
+        <form id="run-form">
+          <label>Dataset Name <input id="upload_dataset_name" name="dataset_name" type="text" placeholder="my_area_1" /></label>
+          <label>Target Element <input id="upload_target_element" name="target_element" type="text" placeholder="Au" /></label>
+          <label>Sample CSV <input id="upload_sample_file" name="sample_file" type="file" accept=".csv" /></label>
+          <label>Site CSV <input id="upload_site_file" name="site_file" type="file" accept=".csv" /></label>
+          <label>Model
+            <select id="model_name" name="model_name">
+              <option value="geochemformer">GeoChemFormer</option>
+              <option value="ae">AutoEncoder</option>
+              <option value="vae">Variational AutoEncoder</option>
+              <option value="transformer">Transformer</option>
+              <option value="zscore">Z-Score</option>
+              <option value="mahalanobis">Mahalanobis</option>
+              <option value="knn">kNN</option>
+              <option value="iforest">Isolation Forest</option>
+              <option value="ocsvm">One-Class SVM</option>
+            </select>
+          </label>
+          <label>Transform
+            <select id="compositional_transform" name="compositional_transform">
+              <option value="ilr">ILR</option>
+              <option value="clr">CLR</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <label>Feature Strategy
+            <select id="feature_strategy" name="feature_strategy">
+              <option value="none">All Features</option>
+              <option value="manual">Manual</option>
+              <option value="causal">Causal Proxy</option>
+              <option value="llm">LLM Proxy</option>
+              <option value="pca">PCA</option>
+            </select>
+          </label>
+          <label>Top K <input id="feature_top_k" name="feature_top_k" type="number" value="24" /></label>
+          <label>PCA Components <input id="pca_components" name="pca_components" type="number" value="24" /></label>
+          <label>K Neighbors <input id="k_neighbors" name="k_neighbors" type="number" value="128" /></label>
+          <label>Context Epochs <input id="context_epochs" name="context_epochs" type="number" value="20" /></label>
+          <label>Anomaly Epochs <input id="anomaly_epochs" name="anomaly_epochs" type="number" value="30" /></label>
+          <label>Batch Size <input id="batch_size" name="batch_size" type="number" value="128" /></label>
+          <label>Learning Rate <input id="learning_rate" name="learning_rate" type="number" step="0.0001" value="0.001" /></label>
+          <label>Interpolation
+            <select id="interpolation_method" name="interpolation_method">
+              <option value="idw">IDW</option>
+              <option value="kriging">Kriging</option>
+            </select>
+          </label>
+          <label>Device
+            <select id="device" name="device">
+              <option value="cpu">CPU</option>
+              <option value="mps">MPS</option>
+              <option value="cuda">CUDA</option>
+            </select>
+          </label>
+          <div id="form-status" class="summary">Choose two CSV files, set parameters, then click Start Run.</div>
+          <button type="submit">Start Run</button>
+        </form>
+      </section>
+
+      <section class="panel runs">
+        <h2>Runs</h2>
+        <div id="run-list" class="run-list"></div>
+      </section>
+
+      <section class="panel details">
+        <h2>Selected Run</h2>
+        <div id="run-summary" class="summary">No run selected.</div>
+        <div id="run-actions" class="summary"></div>
+        <div id="map-note" class="summary">
+          Map view: uploaded sample points, uploaded known sites, and interpolated anomaly surface on a geographic basemap.
+        </div>
+        <div id="result-map"></div>
+      </section>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="/web/app-v2.js" defer></script>
+  </body>
+  </html>
