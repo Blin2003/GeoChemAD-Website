@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>GeoChemAD Run Detail</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="/web/styles.css?v=4" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="view-stack">
+        <section class="panel details">
+          <div class="detail-header">
+            <button id="back-button" type="button" class="back-button">Back</button>
+            <div>
+              <p class="eyebrow">Run Detail</p>
+              <h2>Selected Run</h2>
+            </div>
+          </div>
+          <div id="run-summary" class="summary">Loading run...</div>
+          <div id="run-actions" class="summary"></div>
+          <div id="map-note" class="summary">
+            Map view: uploaded sample points, uploaded known sites, and interpolated anomaly surface on a geographic basemap.
+          </div>
+          <div id="result-map"></div>
+        </section>
+      </section>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="/web/app-v2.js?v=4" defer></script>
+  </body>
+  </html>

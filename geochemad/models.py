@@ -147,6 +147,35 @@ class VariationalAutoEncoder(nn.Module):
         return self.decoder(z), mu, logvar
 
 
+class TabularDiscriminator(nn.Module):
+    def __init__(self, feature_dim: int, hidden_dim: int = 128):
+        super().__init__()
+        self.feature_net = nn.Sequential(
+            nn.Linear(feature_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+        )
+        self.head = nn.Linear(hidden_dim, 1)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        features = self.feature_net(x)
+        logits = self.head(features)
+        return logits, features
+
+
+class CascadeGenerator(nn.Module):
+    def __init__(self, feature_dim: int, hidden_dim: int = 128, latent_dim: int = 32):
+        super().__init__()
+        self.stage_one = AutoEncoder(feature_dim, hidden_dim=hidden_dim, latent_dim=latent_dim)
+        self.stage_two = AutoEncoder(feature_dim, hidden_dim=hidden_dim, latent_dim=latent_dim)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        coarse = self.stage_one(x)
+        refined = self.stage_two(coarse)
+        return coarse, refined
+
+
 class ElementTransformer(nn.Module):
     def __init__(self, feature_dim: int, hidden_dim: int = 128, num_heads: int = 4, num_layers: int = 3):
         super().__init__()

@@ -3,7 +3,14 @@ const state = {
   selectedRun: null,
   map: null,
   mapLayers: [],
+  infoMarker: null,
+  lastDrawnRunId: null,
+  lastDrawnFingerprint: null,
 };
+
+function currentRunIdFromUrl() {
+  return new URLSearchParams(window.location.search).get("run");
+}
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -19,29 +26,41 @@ function runFormData(form) {
 
 function renderRuns() {
   const container = document.getElementById("run-list");
+  if (!container) {
+    return;
+  }
   container.innerHTML = "";
   state.runs.forEach((run) => {
     const card = document.createElement("div");
     card.className = `run-card status-${run.status}`;
     const button = document.createElement("button");
+    button.type = "button";
+    button.className = "run-card-main";
     const auc = run.metrics?.auc_mean ? `AUC ${run.metrics.auc_mean.toFixed(4)}` : run.status;
     button.innerHTML = `
       <strong>${run.model_name}</strong>
-      <span>${run.dataset_id}</span>
-      <span>${auc}</span>
+      <span class="run-meta">${run.dataset_id}</span>
+      <span class="run-meta">${auc}</span>
     `;
-    button.addEventListener("click", () => loadRun(run.run_id));
-    card.appendChild(button);
+    button.addEventListener("click", () => {
+      window.location.href = `/web/run.html?run=${encodeURIComponent(run.run_id)}`;
+    });
     if (["queued", "running", "cancelling"].includes(run.status)) {
       const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "stop-button";
       cancel.textContent = run.status === "cancelling" ? "Cancelling..." : "Stop";
       cancel.disabled = run.status === "cancelling";
-      cancel.addEventListener("click", async () => {
+      cancel.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        showFormStatus(`Stopping run ${run.dataset_id}...`);
         await fetchJson(`/api/runs/${run.run_id}/cancel`, { method: "POST" });
         await refreshRuns();
       });
-      card.appendChild(cancel);
+      button.appendChild(cancel);
     }
+    card.appendChild(button);
     container.appendChild(card);
   });
 }
@@ -63,6 +82,10 @@ function ensureMap() {
 function clearMapLayers() {
   state.mapLayers.forEach((layer) => state.map.removeLayer(layer));
   state.mapLayers = [];
+  if (state.infoMarker) {
+    state.map.removeLayer(state.infoMarker);
+    state.infoMarker = null;
+  }
 }
 
 function rgbaFromRatio(ratio, alpha = 1) {
@@ -98,7 +121,80 @@ function anomalyOverlay(mapPayload) {
   const xMax = Math.max(...mapPayload.grid_x);
   return L.imageOverlay(canvas.toDataURL("image/png"), [[yMin, xMin], [yMax, xMax]], {
     opacity: 0.7,
-    interactive: false,
+    interactive: true,
+  });
+}
+
+function nearestSampleInfo(latlng, coords, scores) {
+  let bestIndex = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  coords.forEach((point, index) => {
+    const dx = point[0] - latlng.lng;
+    const dy = point[1] - latlng.lat;
+    const distance = dx * dx + dy * dy;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  if (bestIndex < 0) {
+    return null;
+  }
+  return {
+    index: bestIndex,
+    lon: coords[bestIndex][0],
+    lat: coords[bestIndex][1],
+    score: scores[bestIndex],
+    distance: Math.sqrt(bestDistance),
+  };
+}
+
+function interpolatedValueAt(latlng, anomalyMap) {
+  if (!anomalyMap?.grid?.length || !anomalyMap.grid_x?.length || !anomalyMap.grid_y?.length) {
+    return null;
+  }
+  const { grid, grid_x: gridX, grid_y: gridY } = anomalyMap;
+  const xMin = gridX[0];
+  const xMax = gridX[gridX.length - 1];
+  const yMin = gridY[0];
+  const yMax = gridY[gridY.length - 1];
+  if (latlng.lng < xMin || latlng.lng > xMax || latlng.lat < yMin || latlng.lat > yMax) {
+    return null;
+  }
+  const xRatio = (latlng.lng - xMin) / Math.max(xMax - xMin, 1e-9);
+  const yRatio = (latlng.lat - yMin) / Math.max(yMax - yMin, 1e-9);
+  const col = Math.min(gridX.length - 1, Math.max(0, Math.round(xRatio * (gridX.length - 1))));
+  const row = Math.min(gridY.length - 1, Math.max(0, Math.round(yRatio * (gridY.length - 1))));
+  return grid[row]?.[col] ?? null;
+}
+
+function attachMapInspector(run, coords, scores) {
+  if (!state.map) {
+    return;
+  }
+  state.map.off("click");
+  state.map.on("click", (event) => {
+    const nearest = nearestSampleInfo(event.latlng, coords, scores);
+    const interpolated = interpolatedValueAt(event.latlng, run.payload?.anomaly_map);
+    const lines = [
+      `<strong>Map point</strong>`,
+      `Lon: ${event.latlng.lng.toFixed(5)}`,
+      `Lat: ${event.latlng.lat.toFixed(5)}`,
+    ];
+    if (interpolated !== null) {
+      lines.push(`Heat value: ${Number(interpolated).toFixed(4)}`);
+    }
+    if (nearest) {
+      lines.push(`Nearest sample score: ${nearest.score.toFixed(4)}`);
+      lines.push(`Nearest sample: (${nearest.lon.toFixed(5)}, ${nearest.lat.toFixed(5)})`);
+    }
+    if (state.infoMarker) {
+      state.map.removeLayer(state.infoMarker);
+    }
+    state.infoMarker = L.popup({ maxWidth: 320 })
+      .setLatLng(event.latlng)
+      .setContent(`<div class="sample-popup">${lines.join("<br/>")}</div>`)
+      .openOn(state.map);
   });
 }
 
@@ -117,6 +213,13 @@ function drawMap(run) {
   if (!coords.length) {
     return;
   }
+  const drawFingerprint = JSON.stringify({
+    runId: run.run_id,
+    status: run.status,
+    metricAuc: run.metrics?.auc_mean ?? null,
+    scoreCount: scores.length,
+  });
+  const preserveView = state.lastDrawnRunId === run.run_id;
   const scoreMin = Math.min(...scores);
   const scoreMax = Math.max(...scores);
   const bounds = [];
@@ -125,22 +228,30 @@ function drawMap(run) {
     overlay.addTo(state.map);
     state.mapLayers.push(overlay);
   }
-  coords.forEach((point, index) => {
-    const lat = point[1];
-    const lon = point[0];
-    const ratio = (scores[index] - scoreMin) / Math.max(scoreMax - scoreMin, 1e-6);
-    const marker = L.circleMarker([lat, lon], {
-      radius: 3,
-      weight: 0,
-      fillOpacity: 0.8,
-      fillColor: rgbaFromRatio(ratio, 0.95),
-    }).bindPopup(
-      `<div class="sample-popup"><strong>Sample</strong><br/>Score: ${scores[index].toFixed(4)}<br/>Lon: ${lon.toFixed(5)}<br/>Lat: ${lat.toFixed(5)}</div>`
-    );
-    marker.addTo(state.map);
-    state.mapLayers.push(marker);
-    bounds.push([lat, lon]);
-  });
+  if (typeof L.heatLayer === "function") {
+    const heatPoints = coords.map((point, index) => {
+      const lat = point[1];
+      const lon = point[0];
+      const ratio = (scores[index] - scoreMin) / Math.max(scoreMax - scoreMin, 1e-6);
+      bounds.push([lat, lon]);
+      return [lat, lon, 0.15 + 0.85 * ratio];
+    });
+    const heatLayer = L.heatLayer(heatPoints, {
+      radius: 22,
+      blur: 18,
+      minOpacity: 0.28,
+      maxZoom: 12,
+      gradient: {
+        0.15: "#1a7f37",
+        0.4: "#8ebf3f",
+        0.65: "#f6c945",
+        0.85: "#f17c36",
+        1.0: "#c92a2a",
+      },
+    });
+    heatLayer.addTo(state.map);
+    state.mapLayers.push(heatLayer);
+  }
   sites.forEach((site) => {
     const marker = L.circleMarker([site[1], site[0]], {
       radius: 6,
@@ -154,9 +265,12 @@ function drawMap(run) {
     state.mapLayers.push(marker);
     bounds.push([site[1], site[0]]);
   });
-  if (bounds.length) {
+  attachMapInspector(run, coords, scores);
+  if (bounds.length && !preserveView) {
     state.map.fitBounds(bounds, { padding: [24, 24] });
   }
+  state.lastDrawnRunId = run.run_id;
+  state.lastDrawnFingerprint = drawFingerprint;
   setTimeout(() => state.map.invalidateSize(), 50);
 }
 
@@ -183,8 +297,10 @@ function renderRunDetail(run) {
   `;
   actions.innerHTML = "";
   if (["queued", "running", "cancelling"].includes(run.status)) {
+    actions.className = "summary run-actions-inline";
     const cancel = document.createElement("button");
-    cancel.textContent = run.status === "cancelling" ? "Cancelling..." : "Stop This Run";
+    cancel.className = "stop-button";
+    cancel.textContent = run.status === "cancelling" ? "Cancelling..." : "Stop";
     cancel.disabled = run.status === "cancelling";
     cancel.addEventListener("click", async () => {
       await fetchJson(`/api/runs/${run.run_id}/cancel`, { method: "POST" });
@@ -192,6 +308,8 @@ function renderRunDetail(run) {
       await refreshRuns();
     });
     actions.appendChild(cancel);
+  } else {
+    actions.className = "summary";
   }
   drawMap(run);
 }
@@ -205,17 +323,22 @@ async function loadRun(runId) {
 async function refreshRuns() {
   state.runs = await fetchJson("/api/runs");
   renderRuns();
-  if (state.selectedRun) {
-    const match = state.runs.find((run) => run.run_id === state.selectedRun.run_id);
+  const runId = currentRunIdFromUrl();
+  if (runId && document.getElementById("run-summary")) {
+    const match = state.runs.find((run) => run.run_id === runId);
     if (match) {
       await loadRun(match.run_id);
+    } else {
+      showMessage("Run not found.");
     }
   }
 }
 
 function showMessage(message) {
   const summary = document.getElementById("run-summary");
-  summary.textContent = message;
+  if (summary) {
+    summary.textContent = message;
+  }
 }
 
 function showFormStatus(message) {
@@ -226,41 +349,54 @@ function showFormStatus(message) {
 }
 
 async function init() {
-  await refreshRuns();
-  document.getElementById("run-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
-    const payload = runFormData(event.currentTarget);
-    if (!payload.get("dataset_name") || !payload.get("target_element")) {
-      showFormStatus("Dataset name and target element are required.");
-      return;
-    }
-    const sampleFile = payload.get("sample_file");
-    const siteFile = payload.get("site_file");
-    if (!(sampleFile instanceof File) || sampleFile.size === 0 || !(siteFile instanceof File) || siteFile.size === 0) {
-      showFormStatus("Sample CSV and Site CSV are required.");
-      return;
-    }
-    submitButton.disabled = true;
-    showFormStatus("Submitting run to backend...");
-    const response = await fetch("/api/runs/upload", {
-      method: "POST",
-      body: payload,
+  const backButton = document.getElementById("back-button");
+  if (backButton) {
+    backButton.addEventListener("click", () => {
+      window.location.href = "/";
     });
-    if (!response.ok) {
-      const text = await response.text();
-      showFormStatus(text || `Run creation failed: ${response.status}`);
-      submitButton.disabled = false;
-      return;
-    }
-    const run = await response.json();
-    state.runs = [run, ...state.runs];
-    renderRuns();
-    event.currentTarget.reset();
-    showFormStatus(`Run created: ${run.dataset_id} (${run.run_id}).`);
-    submitButton.disabled = false;
-    setTimeout(refreshRuns, 300);
-  });
+  }
+  await refreshRuns();
+  const form = document.getElementById("run-form");
+  if (form) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+      const payload = runFormData(event.currentTarget);
+      if (!payload.get("dataset_name") || !payload.get("target_element")) {
+        showFormStatus("Dataset name and target element are required.");
+        return;
+      }
+      const sampleFile = payload.get("sample_file");
+      const siteFile = payload.get("site_file");
+      if (!(sampleFile instanceof File) || sampleFile.size === 0 || !(siteFile instanceof File) || siteFile.size === 0) {
+        showFormStatus("Sample CSV and Site CSV are required.");
+        return;
+      }
+      submitButton.disabled = true;
+      showFormStatus("Submitting run to backend...");
+      try {
+        const response = await fetch("/api/runs/upload", {
+          method: "POST",
+          body: payload,
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          showFormStatus(text || `Run creation failed: ${response.status}`);
+          return;
+        }
+        const run = await response.json();
+        state.runs = [run, ...state.runs];
+        renderRuns();
+        event.currentTarget.reset();
+        showFormStatus(`Run created: ${run.dataset_id} (${run.run_id}). You can submit another dataset immediately.`);
+        setTimeout(refreshRuns, 300);
+      } catch (error) {
+        showFormStatus(error instanceof Error ? error.message : "Run creation failed.");
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  }
   setInterval(refreshRuns, 5000);
 }
 

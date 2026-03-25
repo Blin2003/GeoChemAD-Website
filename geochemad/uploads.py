@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 import re
 import shutil
+import time
+import uuid
 from dataclasses import asdict
 from pathlib import Path
 
@@ -33,10 +35,11 @@ def save_uploaded_dataset(
     sample_file: UploadFile,
     site_file: UploadFile,
 ) -> DatasetRecord:
-    dataset_id = slugify(dataset_name)
+    base_id = slugify(dataset_name)
+    dataset_id = f"{base_id}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
     target = target_element.upper()
     dataset_dir = upload_root / dataset_id
-    dataset_dir.mkdir(parents=True, exist_ok=True)
+    dataset_dir.mkdir(parents=True, exist_ok=False)
     sample_path = dataset_dir / "samples.csv"
     site_path = dataset_dir / "sites.csv"
     with sample_path.open("wb") as handle:
