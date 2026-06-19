@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeoChemAD</title>
+    <link rel="stylesheet" href="/web/styles.css?v=20260618-no-autoload-full-layers" />
+  </head>
+  <body class="home-body">
+    <header class="home-nav">
+      <a class="home-brand" href="/">
+        <span class="brand-orbit" aria-hidden="true"></span>
+        <span>
+          <strong>GeoChemAD</strong>
+          <small>GAD reasoning model interface</small>
+        </span>
+      </a>
+      <nav>
+        <a href="#workflow">Workflow</a>
+        <a href="#capabilities">Model</a>
+        <button id="nav-research-button" class="nav-button" type="button">Open workspace</button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero-section">
+        <div class="hero-copy">
+          <p class="eyebrow">Supervisor backend · frontend workspace</p>
+          <h1>Explore the GAD reasoning model on an interactive map.</h1>
+          <p class="hero-lead">
+            GeoChemAD is the presentation layer. Data loading, target configuration, background construction,
+            expert fitting, scoring, and geological narratives are provided by gad_reasoning_full_20260610.
+          </p>
+          <div class="hero-actions">
+            <button id="hero-research-button" type="button">Choose target</button>
+          </div>
+          <div class="hero-metrics">
+            <div><strong>GAD</strong><span>supervisor core</span></div>
+            <div><strong>9</strong><span>evaluated targets</span></div>
+            <div><strong>WA</strong><span>model extent</span></div>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="map-card-preview">
+            <div class="preview-toolbar">
+              <span></span><span></span><span></span>
+              <strong>Prospectivity map</strong>
+            </div>
+            <div class="preview-map">
+              <i class="contour c1"></i><i class="contour c2"></i><i class="contour c3"></i>
+              <span class="sample-dot d1"></span><span class="sample-dot d2"></span>
+              <span class="sample-dot d3"></span><span class="sample-dot d4"></span>
+              <span class="site-pin p1"></span><span class="site-pin p2"></span>
+              <div class="score-float">
+                <small>NodeScore</small>
+                <strong>0.846</strong>
+                <em>STRONG</em>
+              </div>
+            </div>
+          </div>
+          <div class="evidence-preview">
+            <div><span>Enrichment</span><i style="--w: 86%"></i><strong>0.82</strong></div>
+            <div><span>Pathfinder</span><i style="--w: 72%"></i><strong>0.69</strong></div>
+            <div><span>Correlation</span><i style="--w: 58%"></i><strong>0.55</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-block research-launch">
+        <div>
+          <p class="eyebrow">Supervisor target configuration</p>
+          <h2>Open a model workspace.</h2>
+          <p>Choose the starting target. The same target selector remains available inside the map workspace.</p>
+        </div>
+        <label>
+          Start target
+          <select id="research-target" disabled>
+            <option>Loading supervisor targets...</option>
+          </select>
+        </label>
+        <label>
+          Data profile
+          <select id="research-profile" disabled>
+            <option>Loading data profiles...</option>
+          </select>
+        </label>
+        <button id="research-button" type="button" disabled>Load workspace</button>
+        <div id="research-status" class="status-line">Connecting to gad_reasoning_full_20260610...</div>
+      </section>
+
+      <section id="workflow" class="section-block">
+        <div class="section-heading">
+          <p class="eyebrow">Responsibility boundary</p>
+          <h2>One model core, one presentation layer.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <span>1</span>
+            <h3>Choose a target</h3>
+            <p>The target definitions and enriched known-site files come from the supervisor evaluation configuration.</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>Run GAD reasoning</h3>
+            <p>The supervisor ProspectivityModel builds its background and fits enrichment, pathfinder, and correlation experts.</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>Inspect the output</h3>
+            <p>This frontend renders point, coordinate, and regional NodeScore results without replacing missing model evidence.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="capabilities" class="section-block capability-band">
+        <div>
+          <p class="eyebrow">Current execution profile</p>
+          <h2>Real supervisor geochemistry, explicitly scoped.</h2>
+          <p>
+            The local workspace runs the supervisor model's geochem layer with the real GSWA stream-sediment source.
+            Full geophysics and structure layers remain part of the supervisor project but require its HPC-scale data stack.
+          </p>
+        </div>
+        <ul>
+          <li>Cu, Au, Ni, W, Sn, Co, Ta, Mn, and REE configurations</li>
+          <li>Supervisor ProspectivityModel and NodeScore tree</li>
+          <li>Supervisor narrative and signed feature evidence</li>
+          <li>Map click, coordinates, place search, and drawn regions</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="/web/home.js?v=20260618-no-autoload-full-layers" defer></script>
+  </body>
+</html>

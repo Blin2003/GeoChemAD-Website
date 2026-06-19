@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeoChemAD Analysis</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <link rel="stylesheet" href="/web/styles.css?v=20260618-no-autoload-full-layers" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  </head>
+  <body class="analysis-body">
+    <div class="bg-glow" aria-hidden="true"></div>
+    <header class="site-header">
+      <a class="logo" href="/">
+        <span class="logo-gem" aria-hidden="true">
+          <svg viewBox="0 0 36 36" fill="none">
+            <polygon points="18,3 33,12 33,24 18,33 3,24 3,12" stroke="url(#gem2)" stroke-width="1.5" />
+            <polygon points="18,10 26,14 26,22 18,26 10,22 10,14" fill="url(#gem2)" opacity="0.28" />
+            <defs>
+              <linearGradient id="gem2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#ffd060" />
+                <stop offset="100%" stop-color="#b87333" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </span>
+        <span>
+          <strong>GeoChemAD</strong>
+          <small id="header-target-label">Prospectivity workspace</small>
+        </span>
+      </a>
+      <div class="header-actions">
+        <span id="session-badge" class="hbadge">Loading session</span>
+        <a class="ghost-link" href="/">Change Target</a>
+      </div>
+    </header>
+
+    <main class="analysis-layout">
+      <section class="map-panel">
+        <div id="analysis-map"></div>
+        <div class="map-controls glass-card">
+          <label>
+            Target in workspace
+            <select id="target-select"></select>
+          </label>
+        </div>
+        <div class="place-search glass-card">
+          <label>
+            Place / suburb
+            <input id="place-search" type="search" autocomplete="off" placeholder="Try Claremont, Nedlands, Crawley" />
+          </label>
+          <div id="place-suggestions" class="place-suggestions"></div>
+        </div>
+        <div class="layer-drawer glass-card">
+          <span class="card-label">Map Layers</span>
+          <div id="map-layer-list" class="map-layer-list"></div>
+        </div>
+        <div id="map-hint" class="map-hint">Blue dots are GSWA sample locations. Yellow dots are known target sites; scoring still requires nearby sample evidence.</div>
+      </section>
+
+      <aside class="results-panel">
+        <section class="summary-strip">
+          <div><span>Samples</span><strong id="summary-samples">0</strong></div>
+          <div><span>Sites</span><strong id="summary-sites">0</strong></div>
+          <div><span>AUC</span><strong id="summary-auc">n/a</strong></div>
+        </section>
+
+        <section id="welcome-panel" class="rp-state glass-card">
+          <h2>Analysis Ready</h2>
+          <p id="welcome-copy">Loading supervisor model...</p>
+          <div id="research-badges" class="research-badges" hidden></div>
+          <div class="legend">
+            <span><i class="legend-dot background-dot"></i>Background</span>
+            <span><i class="legend-dot buffer-dot"></i>Buffer</span>
+            <span><i class="legend-dot near-dot"></i>Near-deposit</span>
+            <span><i class="legend-dot site-dot"></i><span id="legend-target-site">Target site</span></span>
+          </div>
+        </section>
+
+        <section id="result-panel" class="result-stack" hidden>
+          <div class="probe-card glass-card">
+            <div>
+              <span id="selection-card-label" class="card-label">Selected Point</span>
+              <strong id="point-title">-</strong>
+              <p id="point-copy">-</p>
+            </div>
+          </div>
+
+          <div class="verdict-card glass-card">
+            <div class="gauge-wrap">
+              <canvas id="gauge-canvas" width="300" height="170"></canvas>
+              <div class="gauge-text">
+                <span id="score-pct">0.0%</span>
+                <small id="gauge-target-label">Prospectivity</small>
+              </div>
+            </div>
+            <div class="verdict-copy">
+              <span id="level-badge" class="level-badge">LOW</span>
+              <div id="zscore-val" class="zscore-val">Score 0.000</div>
+              <p id="signal-summary">No interpretation yet.</p>
+            </div>
+          </div>
+
+          <div class="glass-card assessment-card">
+            <span class="card-label">Geological Assessment</span>
+            <p id="assessment-body" class="assessment-body">No interpretation yet.</p>
+            <div id="anom-pills" class="anom-pills"></div>
+          </div>
+
+          <div class="glass-card">
+            <span class="card-label">Evidence Layers</span>
+            <div id="evidence-layer-list" class="evidence-layer-list"></div>
+          </div>
+
+          <div class="glass-card">
+            <span class="card-label">Expert Narrative</span>
+            <p id="expert-summary" class="assessment-body">No expert narrative yet.</p>
+            <div id="expert-breakdown" class="detail-stack"></div>
+          </div>
+
+          <div class="glass-card">
+            <span class="card-label">Geochemical Evidence</span>
+            <div id="elem-profile-list" class="element-profile-list"></div>
+            <div class="ratio-divider"></div>
+            <span class="card-sublabel">Pathfinder Ratios</span>
+            <div id="ratio-list" class="ratio-list"></div>
+          </div>
+
+          <div class="glass-card">
+            <span class="card-label">Context</span>
+            <div id="point-context" class="detail-stack"></div>
+          </div>
+
+          <div class="glass-card">
+            <span class="card-label">Elements</span>
+            <div class="element-table-head">
+              <span>Element</span>
+              <span>Value</span>
+              <span>Check</span>
+            </div>
+            <div id="element-table" class="element-table"></div>
+          </div>
+
+          <div class="glass-card">
+            <span class="card-label">Score Breakdown</span>
+            <div id="signal-detail" class="detail-stack"></div>
+          </div>
+        </section>
+
+        <section class="glass-card">
+          <span class="card-label">Reference Model</span>
+          <p id="model-description" class="muted">Loading model summary...</p>
+          <div id="model-provenance" class="model-provenance"></div>
+          <div id="model-detail" class="detail-stack"></div>
+        </section>
+
+        <section id="exact-tools" class="glass-card tool-card">
+          <span id="exact-tools-label" class="card-label">Coordinate Analysis</span>
+          <form id="coordinate-form" class="mini-grid">
+            <label>Latitude<input id="raw-lat" type="number" step="any" /></label>
+            <label>Longitude<input id="raw-lon" type="number" step="any" /></label>
+            <button id="coordinate-score" type="button">Analyze Coordinate</button>
+          </form>
+          <div id="raw-check-status" class="status-line compact">Enter coordinates or click the map.</div>
+        </section>
+
+        <section class="glass-card">
+          <span class="card-label">Region Selection</span>
+          <p id="region-status" class="muted compact-copy">Use the rectangle, polygon, or circle tools on the map to summarize a custom area.</p>
+          <div id="region-detail" class="detail-stack"></div>
+        </section>
+      </aside>
+    </main>
+    <script src="/web/analysis.js?v=20260618-no-autoload-full-layers" defer></script>
+  </body>
+</html>

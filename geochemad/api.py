@@ -1,149 +1,36 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
-from .catalog import DatasetRecord
-from .runs import RunRegistry
+from .research_backend import ResearchModelService, data_profile, demo_data_root, research_root
 from .settings import ProjectPaths
-from .training import ExperimentConfig, benchmark_models
-from .uploads import load_uploaded_datasets, save_uploaded_dataset, slugify
 
 
-class ExperimentPayload(BaseModel):
-    dataset_id: str
-    model_name: str = Field(default="geochemformer")
-    compositional_transform: str = Field(default="ilr")
-    hidden_dim: int = Field(default=128, ge=32, le=512)
-    num_heads: int = Field(default=4, ge=1, le=8)
-    num_layers: int = Field(default=3, ge=1, le=8)
-    k_neighbors: int = Field(default=128, ge=4, le=512)
-    context_epochs: int = Field(default=20, ge=1, le=400)
-    anomaly_epochs: int = Field(default=30, ge=1, le=400)
-    batch_size: int = Field(default=128, ge=8, le=2048)
-    learning_rate: float = Field(default=1e-3, gt=0.0, lt=1.0)
-    repeats: int = Field(default=20, ge=1, le=100)
-    background_size: int = Field(default=256, ge=8, le=10000)
-    seed: int = Field(default=42)
-    device: str = Field(default="cpu")
-    feature_strategy: str = Field(default="none")
-    feature_top_k: int = Field(default=24, ge=2, le=128)
-    pca_components: int = Field(default=24, ge=2, le=128)
-    interpolation_method: str = Field(default="idw")
-    interpolation_grid_size: int = Field(default=96, ge=24, le=256)
-
-    def to_config(self) -> ExperimentConfig:
-        config = ExperimentConfig(dataset_id=self.dataset_id)
-        config.model_name = self.model_name
-        config.preprocess.compositional_transform = self.compositional_transform  # type: ignore[misc]
-        config.hidden_dim = self.hidden_dim
-        config.num_heads = self.num_heads
-        config.num_layers = self.num_layers
-        config.k_neighbors = self.k_neighbors
-        config.context_epochs = self.context_epochs
-        config.anomaly_epochs = self.anomaly_epochs
-        config.batch_size = self.batch_size
-        config.learning_rate = self.learning_rate
-        config.repeats = self.repeats
-        config.background_size = self.background_size
-        config.seed = self.seed
-        config.device = self.device
-        config.preprocess.feature_selection.strategy = self.feature_strategy
-        config.preprocess.feature_selection.top_k = self.feature_top_k
-        config.preprocess.feature_selection.pca_components = self.pca_components
-        config.interpolation_method = self.interpolation_method
-        config.interpolation_grid_size = self.interpolation_grid_size
-        return config
-
-
-def build_config(
-    dataset_id: str,
-    model_name: str,
-    compositional_transform: str,
-    hidden_dim: int,
-    num_heads: int,
-    num_layers: int,
-    k_neighbors: int,
-    context_epochs: int,
-    anomaly_epochs: int,
-    batch_size: int,
-    learning_rate: float,
-    repeats: int,
-    background_size: int,
-    seed: int,
-    device: str,
-    feature_strategy: str,
-    feature_top_k: int,
-    pca_components: int,
-    interpolation_method: str,
-    interpolation_grid_size: int,
-) -> ExperimentConfig:
-    config = ExperimentConfig(dataset_id=dataset_id)
-    config.model_name = model_name
-    config.preprocess.compositional_transform = compositional_transform  # type: ignore[misc]
-    config.hidden_dim = hidden_dim
-    config.num_heads = num_heads
-    config.num_layers = num_layers
-    config.k_neighbors = k_neighbors
-    config.context_epochs = context_epochs
-    config.anomaly_epochs = anomaly_epochs
-    config.batch_size = batch_size
-    config.learning_rate = learning_rate
-    config.repeats = repeats
-    config.background_size = background_size
-    config.seed = seed
-    config.device = device
-    config.preprocess.feature_selection.strategy = feature_strategy
-    config.preprocess.feature_selection.top_k = feature_top_k
-    config.preprocess.feature_selection.pca_components = pca_components
-    config.interpolation_method = interpolation_method
-    config.interpolation_grid_size = interpolation_grid_size
-    return config
-
-
-class BenchmarkPayload(BaseModel):
-    dataset_ids: list[str]
-    models: list[str]
-    compositional_transform: str = Field(default="ilr")
-    feature_strategy: str = Field(default="none")
-    feature_top_k: int = Field(default=24, ge=2, le=128)
-    pca_components: int = Field(default=24, ge=2, le=128)
-    context_epochs: int = Field(default=10, ge=1, le=400)
-    anomaly_epochs: int = Field(default=20, ge=1, le=400)
-    k_neighbors: int = Field(default=128, ge=4, le=512)
-    batch_size: int = Field(default=128, ge=8, le=2048)
-    repeats: int = Field(default=10, ge=1, le=100)
-    background_size: int = Field(default=256, ge=8, le=10000)
-    device: str = Field(default="cpu")
-
-    def to_config(self, dataset_id: str) -> ExperimentConfig:
-        config = ExperimentConfig(dataset_id=dataset_id)
-        config.preprocess.compositional_transform = self.compositional_transform  # type: ignore[misc]
-        config.preprocess.feature_selection.strategy = self.feature_strategy
-        config.preprocess.feature_selection.top_k = self.feature_top_k
-        config.preprocess.feature_selection.pca_components = self.pca_components
-        config.context_epochs = self.context_epochs
-        config.anomaly_epochs = self.anomaly_epochs
-        config.k_neighbors = self.k_neighbors
-        config.batch_size = self.batch_size
-        config.repeats = self.repeats
-        config.background_size = self.background_size
-        config.device = self.device
-        return config
+LOCAL_AU_PLACES: list[dict[str, Any]] = [
+    {"name": "Claremont, Western Australia, Australia", "lat": -31.9813, "lon": 115.7799, "bbox": [-32.005, -31.957, 115.750, 115.807], "type": "suburb"},
+    {"name": "Nedlands, Western Australia, Australia", "lat": -31.9802, "lon": 115.8072, "bbox": [-32.011, -31.955, 115.780, 115.836], "type": "suburb"},
+    {"name": "Crawley, Western Australia, Australia", "lat": -31.9845, "lon": 115.8171, "bbox": [-31.997, -31.970, 115.803, 115.830], "type": "suburb"},
+    {"name": "Perth, Western Australia, Australia", "lat": -31.9523, "lon": 115.8613, "bbox": [-32.08, -31.86, 115.74, 116.02], "type": "city"},
+    {"name": "Kalgoorlie, Western Australia, Australia", "lat": -30.7489, "lon": 121.4658, "bbox": [-30.86, -30.65, 121.34, 121.58], "type": "city"},
+    {"name": "Geraldton, Western Australia, Australia", "lat": -28.7774, "lon": 114.6149, "bbox": [-28.88, -28.68, 114.52, 114.72], "type": "city"},
+    {"name": "Port Hedland, Western Australia, Australia", "lat": -20.3107, "lon": 118.6011, "bbox": [-20.43, -20.20, 118.48, 118.72], "type": "town"},
+]
 
 
 def create_app(paths: ProjectPaths | None = None) -> FastAPI:
     paths = paths or ProjectPaths()
     paths.ensure()
-    app = FastAPI(title="GeoChemAD")
+
+    app = FastAPI(title="GeoChemAD Supervisor Model UI", version="3.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -151,161 +38,176 @@ def create_app(paths: ProjectPaths | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    datasets = load_uploaded_datasets(paths.upload_dir)
-    dataset_index: dict[str, DatasetRecord] = {record.subset_id: record for record in datasets}
-    registry = RunRegistry(paths.artifact_dir / "runs", dataset_index)
-    app.state.paths = paths
-    app.state.datasets = datasets
-    app.state.registry = registry
+    full_data_root = research_root() / "datasets"
+    demo_root = demo_data_root()
+    app.state.research_sessions = {}
+    app.state.research_services = {
+        "default": ResearchModelService(),
+        "demo": ResearchModelService(
+            data_root_override=demo_root,
+            profile_name="Demo subset",
+            profile_mode="demo",
+        ),
+        "full": ResearchModelService(
+            data_root_override=full_data_root,
+            profile_name="Full teacher datasets",
+            profile_mode="teacher-full",
+        ),
+    }
+
+    def profile_options() -> list[dict[str, Any]]:
+        return [
+            {
+                "key": "demo",
+                "label": "Demo subset",
+                "description": "Fast local subset cut from the teacher data.",
+                "path": str(demo_root),
+                "available": demo_root.exists(),
+            },
+            {
+                "key": "full",
+                "label": "Full teacher data",
+                "description": "Complete local gad_reasoning_full_20260610 datasets.",
+                "path": str(full_data_root),
+                "available": full_data_root.exists(),
+            },
+        ]
+
+    def research_service(profile: str | None = None) -> ResearchModelService:
+        key = profile or "default"
+        if key not in app.state.research_services:
+            raise HTTPException(status_code=400, detail=f"Unknown data profile: {key}")
+        service = app.state.research_services[key]
+        root = Path(service._data_profile()["path"])
+        if not root.exists():
+            raise HTTPException(status_code=400, detail=f"Data profile {key!r} is not available at {root}")
+        return service
+
+    def session_service(session: Any) -> ResearchModelService:
+        return research_service(getattr(session, "profile_key", "default"))
 
     @app.get("/api/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
-
-    @app.get("/api/datasets")
-    def list_datasets() -> list[dict[str, Any]]:
-        return [record.to_dict() for record in dataset_index.values()]
-
-    @app.get("/api/datasets/{dataset_id}")
-    def dataset_detail(dataset_id: str) -> dict[str, Any]:
-        record = dataset_index.get(dataset_id)
-        if record is None:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        return record.to_dict()
-
-    @app.get("/api/datasets/{dataset_id}/preview")
-    def dataset_preview(dataset_id: str, limit: int = 5) -> dict[str, Any]:
-        record = dataset_index.get(dataset_id)
-        if record is None:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        import pandas as pd
-
-        sample = pd.read_csv(record.sample_path, encoding="utf-8-sig", nrows=limit)
-        sites = pd.read_csv(record.site_path, encoding="utf-8-sig", nrows=limit)
+    def health() -> dict[str, Any]:
         return {
-            "sample_columns": sample.columns.tolist(),
-            "sample_rows": sample.fillna("").to_dict(orient="records"),
-            "site_columns": sites.columns.tolist(),
-            "site_rows": sites.fillna("").to_dict(orient="records"),
+            "status": "ok",
+            "backend": "gad_reasoning_full_20260610",
+            "role": "frontend-adapter",
+            "dataProfile": data_profile(),
+            "profiles": profile_options(),
         }
 
-    @app.post("/api/runs")
-    def create_run(payload: ExperimentPayload) -> dict[str, Any]:
-        state = registry.start(payload.to_config())
-        return asdict(state)
+    @app.get("/api/research/targets")
+    def research_targets(profile: str = "demo") -> dict[str, Any]:
+        service = research_service(profile)
+        return {
+            "targets": service.target_options(),
+            "coverage": {"west": 114.5, "east": 128.5, "south": -33.5, "north": -15.0},
+            "source": "gad_reasoning_full_20260610",
+            "dataProfile": service._data_profile(),
+            "profiles": profile_options(),
+            "coverageRegions": service.coverage_regions(),
+            "layers": ["geochem", "geophys_available", "structure_available"],
+        }
 
-    @app.post("/api/runs/upload")
-    async def create_run_from_upload(
-        dataset_name: str = Form(...),
-        target_element: str = Form(...),
-        sample_file: UploadFile = File(...),
-        site_file: UploadFile = File(...),
-        model_name: str = Form("geochemformer"),
-        compositional_transform: str = Form("ilr"),
-        hidden_dim: int = Form(128),
-        num_heads: int = Form(4),
-        num_layers: int = Form(3),
-        k_neighbors: int = Form(128),
-        context_epochs: int = Form(20),
-        anomaly_epochs: int = Form(30),
-        batch_size: int = Form(128),
-        learning_rate: float = Form(1e-3),
-        repeats: int = Form(20),
-        background_size: int = Form(256),
-        seed: int = Form(42),
-        device: str = Form("cpu"),
-        feature_strategy: str = Form("none"),
-        feature_top_k: int = Form(24),
-        pca_components: int = Form(24),
-        interpolation_method: str = Form("idw"),
-        interpolation_grid_size: int = Form(96),
+    @app.get("/api/research/layers")
+    def research_layers(profile: str = "demo") -> dict[str, Any]:
+        return research_service(profile).layer_inventory()
+
+    @app.post("/api/research/start")
+    def research_start(target: str = "Cu", profile: str = "demo") -> dict[str, Any]:
+        try:
+            service = research_service(profile)
+            session = service.create_session(target)
+            session.profile_key = profile
+            app.state.research_sessions[session.session_id] = session
+            return service.session_payload(session)
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/research/{session_id}")
+    def research_session(session_id: str, target: Optional[str] = None) -> dict[str, Any]:
+        session = app.state.research_sessions.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Research session not found.")
+        try:
+            return session_service(session).session_payload(session, target)
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/research/{session_id}/point")
+    def research_point(session_id: str, lon: float, lat: float, target: Optional[str] = None) -> dict[str, Any]:
+        session = app.state.research_sessions.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Research session not found.")
+        try:
+            return session_service(session).score_point(session, lon=lon, lat=lat, target=target)
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/research/{session_id}/region")
+    async def research_region(
+        session_id: str,
+        payload: dict[str, Any],
+        target: Optional[str] = None,
     ) -> dict[str, Any]:
-        record = save_uploaded_dataset(
-            paths.upload_dir,
-            dataset_name=dataset_name,
-            target_element=target_element,
-            sample_file=sample_file,
-            site_file=site_file,
+        session = app.state.research_sessions.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Research session not found.")
+        try:
+            return session_service(session).score_region(session, payload=payload, target=target)
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/places/search")
+    def place_search(q: str) -> list[dict[str, Any]]:
+        query = q.strip()
+        if len(query) < 2:
+            return []
+        local = [place for place in LOCAL_AU_PLACES if query.lower() in place["name"].lower()]
+        params = urlencode(
+            {
+                "q": f"{query}, Australia",
+                "format": "jsonv2",
+                "addressdetails": 1,
+                "limit": 8,
+                "countrycodes": "au",
+            }
         )
-        meta_path = paths.upload_dir / record.subset_id / "meta.json"
-        meta_path.write_text(
-            json.dumps({"dataset_name": dataset_name, "target_element": target_element}, indent=2),
-            encoding="utf-8",
+        request = Request(
+            f"https://nominatim.openstreetmap.org/search?{params}",
+            headers={"User-Agent": "GeoChemAD supervisor-model frontend"},
         )
-        config = build_config(
-            dataset_id=record.subset_id,
-            model_name=model_name,
-            compositional_transform=compositional_transform,
-            hidden_dim=hidden_dim,
-            num_heads=num_heads,
-            num_layers=num_layers,
-            k_neighbors=k_neighbors,
-            context_epochs=context_epochs,
-            anomaly_epochs=anomaly_epochs,
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            repeats=repeats,
-            background_size=background_size,
-            seed=seed,
-            device=device,
-            feature_strategy=feature_strategy,
-            feature_top_k=feature_top_k,
-            pca_components=pca_components,
-            interpolation_method=interpolation_method,
-            interpolation_grid_size=interpolation_grid_size,
-        )
-        state = registry.start_with_record(record, config)
-        return asdict(state)
-
-    @app.post("/api/runs/{run_id}/cancel")
-    def cancel_run(run_id: str) -> dict[str, Any]:
-        state = registry.cancel(run_id)
-        if state is None:
-            raise HTTPException(status_code=404, detail="Run not found")
-        return asdict(state)
-
-    @app.get("/api/runs")
-    def list_runs() -> list[dict[str, Any]]:
-        return [asdict(item) for item in registry.list_runs()]
-
-    @app.get("/api/runs/{run_id}")
-    def get_run(run_id: str) -> dict[str, Any]:
-        state = registry.get_run(run_id)
-        if state is None:
-            raise HTTPException(status_code=404, detail="Run not found")
-        data = asdict(state)
-        run_dir = paths.artifact_dir / "runs" / run_id
-        payload_path = run_dir / "payload.json"
-        config_path = run_dir / "config.json"
-        if payload_path.exists():
-            data["payload"] = json.loads(payload_path.read_text(encoding="utf-8"))
-        if config_path.exists():
-            data["config"] = json.loads(config_path.read_text(encoding="utf-8"))
-        return data
-
-    @app.post("/api/benchmarks")
-    def create_benchmark(payload: BenchmarkPayload) -> dict[str, Any]:
-        records = []
-        for dataset_id in payload.dataset_ids:
-            record = dataset_index.get(dataset_id)
-            if record is None:
-                raise HTTPException(status_code=404, detail=f"Dataset not found: {dataset_id}")
-            records.append(record)
-        result = benchmark_models(records, payload.to_config(records[0].subset_id), payload.models)
-        output_path = paths.artifact_dir / "benchmark_latest.json"
-        output_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-        return result
-
-    @app.get("/api/benchmarks/latest")
-    def latest_benchmark() -> dict[str, Any]:
-        output_path = paths.artifact_dir / "benchmark_latest.json"
-        if not output_path.exists():
-            raise HTTPException(status_code=404, detail="No benchmark result found")
-        return json.loads(output_path.read_text(encoding="utf-8"))
+        try:
+            with urlopen(request, timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception:
+            return local[:8]
+        remote = [
+            {
+                "name": item.get("display_name", ""),
+                "lat": float(item["lat"]),
+                "lon": float(item["lon"]),
+                "bbox": [float(value) for value in item.get("boundingbox", [])],
+                "type": item.get("type", ""),
+            }
+            for item in data
+            if item.get("lat") and item.get("lon")
+        ]
+        seen = {place["name"] for place in local}
+        return (local + [place for place in remote if place["name"] not in seen])[:8]
 
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(paths.web_dir / "index.html")
+        return FileResponse(
+            paths.web_dir / "home.html",
+            headers={"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"},
+        )
+
+    @app.get("/web/index.html")
+    @app.get("/web/run.html")
+    @app.get("/web/point-analysis.html")
+    def old_page() -> RedirectResponse:
+        return RedirectResponse(url="/", status_code=307)
 
     app.mount("/web", StaticFiles(directory=paths.web_dir), name="web")
     return app
