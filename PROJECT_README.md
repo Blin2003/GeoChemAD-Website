@@ -1,11 +1,13 @@
 # GeoChemAD
 
 GeoChemAD is the frontend and HTTP presentation adapter for the supervisor-provided
-`gad_reasoning_full_20260610` project.
+`gad_reasoning_full_20260610` backend. The supervisor backend code is vendored in
+this repository under `supervisor_backend/gad_reasoning_full_20260610`; large data
+files are intentionally not vendored.
 
 ## Architecture Boundary
 
-The supervisor project owns:
+The vendored supervisor backend owns:
 
 - target configurations
 - GSWA source loading
@@ -15,7 +17,7 @@ The supervisor project owns:
 - `ProspectivityModel` and `NodeScore`
 - geological narrative generation
 
-GeoChemAD owns only:
+GeoChemAD owns:
 
 - target selection
 - map, coordinate, place, and region interactions
@@ -23,7 +25,7 @@ GeoChemAD owns only:
 - visual presentation of scores, signals, experts, and narratives
 
 There is no independent GeoChemAD scoring model, CSV training workflow, IDW fallback,
-or synthetic prospectivity demo.
+or synthetic prospectivity demo. Scoring uses the vendored supervisor backend.
 
 ## Targets
 
@@ -35,10 +37,9 @@ Spatial AUC values shown in the interface come from the supervisor evaluation re
 
 ## Local Execution Profile
 
-The local adapter runs the supervisor `geochem` layer with the real GSWA
-stream-sediment source. The full supervisor catalog also contains multi-gigabyte
-geophysics, structure, and additional assay layers intended for the research/HPC
-environment. GeoChemAD does not emulate those missing layers.
+The local adapter can run either a fast demo subset or a full-data profile. The
+full-data profile registers the supervisor geochemistry, geophysics, and
+structure/geology sources when the external data root contains those files.
 
 Scores are returned only where the active supervisor experts have sufficient local
 evidence.
@@ -56,29 +57,30 @@ Open:
 http://127.0.0.1:8000
 ```
 
-The adapter expects the supervisor project code at:
+The supervisor backend code is included at:
 
 ```text
-../gad_reasoning_full_20260610
+supervisor_backend/gad_reasoning_full_20260610
 ```
 
-Set `GAD_REASONING_ROOT` to override that location.
+Set `GAD_REASONING_ROOT` only if you intentionally want to test another backend
+code checkout.
 
-By default, data is read from:
+By default, full data is read from:
 
 ```text
-$GAD_REASONING_ROOT/datasets
+../gad_reasoning_full_20260610/datasets
 ```
 
-Set `GEOCHEMAD_DATA_ROOT` to use another data directory, for example a small
-demo subset created from the teacher data.
+Set `GEOCHEMAD_FULL_DATA_ROOT` to point full-data mode at another datasets
+directory. Set `GEOCHEMAD_DATA_ROOT` only for a custom single data root.
 
 ## Data Profiles
 
 Full local data:
 
 ```bash
-GAD_REASONING_ROOT=/path/to/gad_reasoning_full_20260610 \
+GEOCHEMAD_FULL_DATA_ROOT=/path/to/gad_reasoning_full_20260610/datasets \
 python3 scripts/serve.py
 ```
 
@@ -86,7 +88,7 @@ Demo data subset:
 
 ```bash
 python3 scripts/prepare_demo_data.py --sources sediment
-GEOCHEMAD_DATA_ROOT=/path/to/GeoChemAD/data/demo python3 scripts/serve.py
+python3 scripts/serve.py
 ```
 
 The demo data script copies complete rows inside selected WA regions from the
@@ -98,6 +100,7 @@ tiling/cropping step is added.
 
 - `geochemad/research_backend.py`: thin adapter around supervisor APIs
 - `geochemad/api.py`: research session and UI support endpoints
+- `supervisor_backend/gad_reasoning_full_20260610`: vendored supervisor backend code
 - `web/home.html`: supervisor target selector
 - `scripts/prepare_demo_data.py`: create a small local demo data root from teacher datasets
 - `web/analysis.html`: map and result workspace

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .research_backend import ResearchModelService, data_profile, demo_data_root, research_root
+from .research_backend import ResearchModelService, data_profile, demo_data_root, full_data_root
 from .settings import ProjectPaths
 
 
@@ -38,7 +38,7 @@ def create_app(paths: ProjectPaths | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    full_data_root = research_root() / "datasets"
+    full_root = full_data_root()
     demo_root = demo_data_root()
     app.state.research_sessions = {}
     app.state.research_services = {
@@ -49,7 +49,7 @@ def create_app(paths: ProjectPaths | None = None) -> FastAPI:
             profile_mode="demo",
         ),
         "full": ResearchModelService(
-            data_root_override=full_data_root,
+            data_root_override=full_root,
             profile_name="Full teacher datasets",
             profile_mode="teacher-full",
         ),
@@ -68,8 +68,8 @@ def create_app(paths: ProjectPaths | None = None) -> FastAPI:
                 "key": "full",
                 "label": "Full teacher data",
                 "description": "Complete local gad_reasoning_full_20260610 datasets.",
-                "path": str(full_data_root),
-                "available": full_data_root.exists(),
+                "path": str(full_root),
+                "available": full_root.exists(),
             },
         ]
 

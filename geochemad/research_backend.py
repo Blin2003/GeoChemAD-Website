@@ -40,14 +40,21 @@ def research_root() -> Path:
     configured = os.environ.get("GAD_REASONING_ROOT")
     if configured:
         return Path(configured).expanduser().resolve()
-    return Path(__file__).resolve().parents[2] / "gad_reasoning_full_20260610"
+    return Path(__file__).resolve().parents[1] / "supervisor_backend" / "gad_reasoning_full_20260610"
+
+
+def full_data_root() -> Path:
+    configured = os.environ.get("GEOCHEMAD_FULL_DATA_ROOT")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return Path(__file__).resolve().parents[2] / "gad_reasoning_full_20260610" / "datasets"
 
 
 def data_root() -> Path:
     configured = os.environ.get("GEOCHEMAD_DATA_ROOT")
     if configured:
         return Path(configured).expanduser().resolve()
-    return research_root() / "datasets"
+    return full_data_root()
 
 
 def data_profile() -> dict[str, str]:
